@@ -4,12 +4,10 @@
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 //Current sensor
-int currentSensorPin = 35;
-const int avgval = 400;
-long int currentReadignValue = 0;
-float volts;
-float amps = 0;
-float ampPreset = 10;
+#include "EmonLib.h"                   // Include Emon Library
+EnergyMonitor emon1;                   // Create an instance
+double Irms = 0;
+double ampPreset = 0;
 
 //Relay
 int relayPin = 32;
@@ -27,8 +25,7 @@ byte rowPins[ROWS] = {13, 12, 14, 27}; //connect to the row pinouts of the keypa
 byte colPins[COLS] = {26, 25, 33}; //connect to the column pinouts of the keypad
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 char enteredPassword[5];
-const char *password = "1234";
-
+String password = "1234";
 
 //WiFi
 #define wifiLedPin 2
@@ -42,8 +39,8 @@ const char *password = "1234";
 // Provide the RTDB payload printing info and other helper functions.
 #include <addons/RTDBHelper.h>
 /* 1. Define the WiFi credentials */
-#define WIFI_SSID "arjunkichu"
-#define WIFI_PASSWORD "arjun@123"
+#define WIFI_SSID "ankur"
+#define WIFI_PASSWORD "ankur@123"
 // For the following credentials, see examples/Authentications/SignInAsUser/EmailPassword/EmailPassword.ino
 /* 2. Define the API Key */
 #define API_KEY "AIzaSyDa_etOGczVsI0JaHfRFFJfrAF3wuf4ftw"
@@ -86,8 +83,9 @@ void streamCallback(StreamData data)
   if (ampPresetFb.success)
   {
     Serial.println("Success data ampPresetFb");
-    int value = ampPresetFb.to<int>();   
+    int value = ampPresetFb.to<float>();   
     ampPreset = value;
+    reset();
   }   
 
   if (passwordFb.success)
@@ -95,8 +93,7 @@ void streamCallback(StreamData data)
     Serial.println("Success data passwordFb");
     Serial.println(passwordFb.type);
     int value = passwordFb.to<int>();   
-    String str = String(value);
-    // password = str.c_str();
+    password = String(value);
     reset();
   } 
 }
@@ -112,14 +109,18 @@ void streamTimeoutCallback(bool timeout)
 }
 
 void setup() {  
+  
   Serial.begin(115200);
+  //Current
+  emon1.current(35, 8);             // Current: input pin, calibration.
+
   pinMode(relayPin, OUTPUT);
   //LCD
   lcd.init();
   // lcd.clear();
   lcd.backlight();
   lcd.setCursor(0, 0);
-  lcd.print("Connecting wifi.");
+  lcd.print("Connecting WIFI.");
 
   //WIFI
   pinMode(wifiLedPin, OUTPUT);
@@ -186,12 +187,14 @@ void setup() {
 
   lcd.setCursor(0, 0);
   lcd.print("Enter password:");
-  Serial.println("Enter password");
+  Serial.println("Enter password  ");
+  
 }
 
 bool isLoggedIn = false;
 
 void loop() {
+  updateData();
   char key = keypad.getKey();
   if (key != NO_KEY && strlen(enteredPassword) < 4)
   {
@@ -204,13 +207,13 @@ void loop() {
   {
     Serial.println("Password:");
     Serial.println(password);
-    if (strcmp(enteredPassword, password) == 0)
+    if (strcmp(enteredPassword, password.c_str()) == 0)
     {
       Serial.println("Correct password");
       lcd.setCursor(0, 0);
       lcd.print("Password correct");
-      digitalWrite(13, HIGH);
-      enteredPassword[0] = '\0';
+      // enteredPassword[0] = '\0';
+      memset(enteredPassword, 0, sizeof(enteredPassword));
       lcd.setCursor(0, 1);
       lcd.print("            ");
       isLoggedIn = true;
@@ -221,42 +224,39 @@ void loop() {
       lcd.setCursor(0, 0);
       Serial.println("Password incorrect");
       lcd.print("Password incorrect");
-      digitalWrite(13, LOW);
       delay(2000);
       memset(enteredPassword, 0, sizeof(enteredPassword));
       lcd.clear();  
       lcd.setCursor(0, 0);
       lcd.print("Enter password: ");
      }
-    }
+  }
 }
+
+int count = 0;
 
 void checkCurrentAndOperate(){
   while(isLoggedIn)
   {
+    Irms = emon1.calcIrms(600);  // Calculate Irms only
     updateData();
-    for (int t = 0; t < avgval; t++)
+    if (count > 20  && Irms > ampPreset)
     {
-      currentReadignValue += analogRead(currentSensorPin);
-      delay(4);
-    }
-    currentReadignValue = currentReadignValue / avgval;
-    volts = currentReadignValue * 5.0 / 4095.0;
-    amps = (volts - 2.5) / 0.100;
-    if (amps > ampPreset)
-    {
-      Serial.println("over loaded");
-      overLoad();
-      delay(2000);
       digitalWrite(relayPin, LOW);
+      Serial.print("over loaded: ");
+      Serial.println(Irms);
+      overLoad();
+      updateData();
+      delay(5000);
       reset();
     }
     else 
     {
-      Serial.print("current value=");
-      Serial.print(amps);
+      Serial.print("Current value=");
+      Serial.print(Irms);
       Serial.println("Amps");
       digitalWrite(relayPin, HIGH);
+      count ++;
     } 
   }
 }
@@ -274,16 +274,20 @@ void reset(){
   lcd.setCursor(0, 0);
   lcd.print("Enter password:");
   isLoggedIn = false;
+  count = 0;
+  Irms = 0;
 }
 
 
 void updateData(){
-  if (Firebase.ready() && (millis() - sendDataPrevMillis > 5000 || sendDataPrevMillis == 0))
+  if (Firebase.ready() && (millis() - sendDataPrevMillis > 1000 || sendDataPrevMillis == 0))
   {
     sendDataPrevMillis = millis();
     FirebaseJson json;
-    json.set("amp", amps);
-    json.set("volt", volts);
+    json.set("isLoggedIn", isLoggedIn);
+    json.set("amp", 0);
+    json.set("maxAmp", Irms);
+    json.set("volt", 2.51);
     json.set(F("ts/.sv"), F("timestamp"));
     Serial.printf("Set json... %s\n", Firebase.RTDB.set(&fbdo, path.c_str(), &json) ? "ok" : fbdo.errorReason().c_str());
     Serial.println("");

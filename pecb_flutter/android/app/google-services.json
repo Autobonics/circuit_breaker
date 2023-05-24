@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "218335559348",
+    "firebase_url": "https://circuit-breaker-2de9d-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "circuit-breaker-2de9d",
+    "storage_bucket": "circuit-breaker-2de9d.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:218335559348:android:7055e90ddfc4ee07b161e1",
+        "android_client_info": {
+          "package_name": "com.autobonics.pecb"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "218335559348-rpndh3lidl442982ar5bkodlpbgqlgbv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBp6Xv4wJlazL1VxeifqS9uFF4hu3jiAWQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "218335559348-rpndh3lidl442982ar5bkodlpbgqlgbv.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
